@@ -52,10 +52,16 @@ def start(config):
         f"    Days to expiry          <= {config['roll_when']['dte']} and P&L >= {config['roll_when']['min_pnl']} ({config['roll_when']['min_pnl'] * 100}%)",
         fg="cyan",
     )
-    click.secho(
-        f"    P&L                     >= {config['roll_when']['pnl']} ({config['roll_when']['pnl'] * 100}%)",
-        fg="cyan",
-    )
+    if "max_dte" in config["roll_when"]:
+        click.secho(
+            f"    P&L                     >= {config['roll_when']['pnl']} ({config['roll_when']['pnl'] * 100}%) and DTE < {config['roll_when']['max_dte']}",
+            fg="cyan",
+        )
+    else:
+        click.secho(
+            f"    P&L                     >= {config['roll_when']['pnl']} ({config['roll_when']['pnl'] * 100}%)",
+            fg="cyan",
+        )
 
     click.echo()
     click.secho("  When contracts are ITM:", fg="green")
@@ -85,7 +91,7 @@ def start(config):
             fg="cyan",
         )
     click.secho(
-        f"    Maximum new contracts    = {config['target']['maximum_new_contracts']}",
+        f"    Maximum new contracts    = {config['target']['maximum_new_contracts_percent'] * 100}% of buying power",
         fg="cyan",
     )
     click.secho(
@@ -99,8 +105,7 @@ def start(config):
         c = config["symbols"][s]
         c_delta = f"{get_target_delta(config, s, 'C'):.2f}".rjust(4)
         p_delta = f"{get_target_delta(config, s, 'P'):.2f}".rjust(4)
-        weight = f"{c['weight']:.2f}".rjust(4)
-        weight_p = f"{(c['weight'] * 100):.1f}".rjust(4)
+        weight_p = f"{(c['weight'] * 100):.2f}".rjust(4)
         strike_limits = ""
         c_limit = get_strike_limit(config, s, "C")
         p_limit = get_strike_limit(config, s, "P")
@@ -109,7 +114,7 @@ def start(config):
         if p_limit:
             strike_limits += f", put strike <= ${p_limit:.2f}"
         click.secho(
-            f"    {s.rjust(5)} weight = {weight} ({weight_p}%), delta = {p_delta}p, {c_delta}c{strike_limits}",
+            f"    {s.rjust(5)} weight = {weight_p}%, delta = {p_delta}p, {c_delta}c{strike_limits}",
             fg="cyan",
         )
     assert (
@@ -125,7 +130,11 @@ def start(config):
 
     # TWS version is pinned to current stable
     ibc_config = config.get("ibc", {})
-    ibc = IBC(981, **ibc_config)
+    # Remove any config params that aren't valid keywords for IBC
+    ibc_keywords = {
+        k: ibc_config[k] for k in ibc_config if k not in ["RaiseRequestErrors"]
+    }
+    ibc = IBC(981, **ibc_keywords)
 
     def onConnected():
         portfolio_manager.manage()
